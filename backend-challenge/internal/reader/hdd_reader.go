@@ -33,21 +33,22 @@ type HDDFileReader struct {
 
 // Coupon File reader for  HDD storage.
 // Since the files are large ~1GB , its not scalable and performant to load the contents in files to memory
-// Files can be readed in streaming , but the file content will need to be readed from the beginning , until the coupon code is matched, which can be Big(N) time in worse case scenario.
+// Files can be readed in streaming , but the file content will need to be readed from the beginning , until the coupon code is matched, which can be O(N) time in worse case scenario.
 // Following optimisations are implemented to make the search faster
 //
-//	(1) Sort the contents in the files in ascending order , its assume the files will be in sorting order before the application starts. sort script is available at utils/sort_file.gp
-//	(2) When the applcation starts reader  will read all the file contents
-//	(3) For each defined chunk size  reader will store the line , and offset of that line , this is called as partial index.
-//	(4) Also for each file  reader captures the first line and last line of the file
-//	(5) When SearchPromoCode function called , reader will filter files which assumes the content inside the file . To do this it check wheter promoCode >= firstline && promoCode <= lastLine
-//	(6) For each filterd files reader will do a bianry search on the partial index for that file . when partial index is found , it gives the indication coupon code may be available in the chunk starts from partil index ,
-//	    to cover the range more , the program will read the lines from next partial index as well. These entries will load to memory , but since their size = chunk size * 2 . the memory foot print will be small for the records.
-//	(7) The program will do a binary search on loaded lines to find a matching couponCode.
+//		(1) Sort the contents in the files in ascending order , its assume the files will be in sorting order before the application starts. sort script is available at utils/sort_file.gp
+//		(2) When the applcation starts reader  will read all the file contents
+//		(3) For each defined chunk size  reader will store the line , and offset of that line , this is called as partial index.
+//		(4) Also for each file  reader captures the first line and last line of the file
+//		(5) When SearchPromoCode function called , reader will filter files which assumes the content inside the file . To do this it check wheter promoCode >= firstline && promoCode <= lastLine
+//		(6) For each filterd files reader will do a bianry search on the partial index for that file . when partial index is found , it gives the indication coupon code may be available in the chunk starts from partil index ,
+//		    to cover the range more , the program will read the lines from next partial index as well. These entries will load to memory , but since their size = chunk size * 2 . the memory foot print will be small for the records.
+//		(7) The program will do a binary search on loaded lines to find a matching couponCode.
+//	 Above optimization will reduce Big O time complexity to O(LogN)
 //
-// . (8) coupon code search on a file operation will handle concurrently , in a batch . This is to avoid  creating go routines when large set of files are available to search.
+// . (8) coupon code search on a file operation will handle concurrently , in a worker pool . This is to avoid  creating go routines when large set of files are available to search.
 // .     Once the condition is matched context will be cancelled so any running coupon code search go routine will stop.
-func newHDDFileReader(rootPath string, chunkSize, searchBatch int) (*HDDFileReader, error) {
+func newHDDFileReader(rootPath string, chunkSize, searchWorkerPool int) (*HDDFileReader, error) {
 	files, err := filepath.Glob(filepath.Join(rootPath, "couponbase*"))
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func newHDDFileReader(rootPath string, chunkSize, searchBatch int) (*HDDFileRead
 	return &HDDFileReader{
 		rootPath:    rootPath,
 		chunkSize:   chunkSize,
-		searchBatch: searchBatch,
+		searchBatch: searchWorkerPool,
 		fileIndexes: indexes,
 	}, nil
 }
@@ -141,7 +142,7 @@ func (r *HDDFileReader) SearchPromo(ctx context.Context, promo string) (bool, er
 	defer cancel()
 
 	results := make(chan searchResult, len(r.fileIndexes))
-	var wg sync.WaitGroup
+	jobs := make(chan *fileIndex, len(r.fileIndexes))
 
 	for _, fi := range r.fileIndexes {
 		// skip files whose range cannot include the promo
@@ -151,21 +152,41 @@ func (r *HDDFileReader) SearchPromo(ctx context.Context, promo string) (bool, er
 				Msg("Skipping searching in the file since Promo code is either small or larger than the first and last record of the file")
 			continue
 		}
+		jobs <- fi
+	}
+	config.Logger.Debug().
+		Int("jobs", len(jobs)).
+		Msg("Number of jobs")
+	close(jobs)
 
+	var wg sync.WaitGroup
+
+	config.Logger.Debug().
+		Int("search batch", r.searchBatch).
+		Msg("Number of search batch")
+	for i := 0; i < r.searchBatch; i++ {
 		wg.Add(1)
-		go func(fi *fileIndex) {
-			config.Logger.Info().
-				Str("File path", fi.path).
-				Msg("Searching the promo index")
-
+		go func(workerID int) {
 			defer wg.Done()
-			ok, err := searchPromoInFile(ctx, fi, promo)
-			select {
-			case <-ctx.Done():
-				return
-			case results <- searchResult{found: ok, path: fi.path, err: err}:
+			for fi := range jobs {
+				config.Logger.Debug().
+					Int("worker_id", workerID).
+					Str("file_path", fi.path).
+					Msg("Worker starting to process file")
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				ok, err := searchPromoInFile(ctx, fi, promo)
+				select {
+				case <-ctx.Done():
+					return
+				case results <- searchResult{found: ok, path: fi.path, err: err}:
+				}
 			}
-		}(fi)
+		}(i)
 	}
 
 	go func() {
@@ -177,7 +198,13 @@ func (r *HDDFileReader) SearchPromo(ctx context.Context, promo string) (bool, er
 	var errs []error
 
 	for res := range results {
+		config.Logger.Debug().
+			Str("file path", res.path).
+			Bool("found", res.found).
+			Msg("serach result details")
 		if res.err != nil {
+			config.Logger.Err(res.err).
+				Msg("Error occured while searching the promo code in file")
 			errs = append(errs, fmt.Errorf("%s: %w", res.path, res.err))
 			continue
 		}

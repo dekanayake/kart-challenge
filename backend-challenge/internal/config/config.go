@@ -15,7 +15,7 @@ type Config struct {
 	Enviornment                         string
 	CouponCodeFolderPath                string
 	CouponCodeFilePartialIndexChunkSize int
-	CouponCodeFileConcurrentBatchSize   int
+	CouponCodeFileConcurrentPoolSize    int
 }
 
 var AppConfig Config
@@ -29,6 +29,7 @@ func LoadConfig() {
 		Enviornment:                         strings.ToLower(getEnvString("ENVIRONMENT", "devlelopment")),
 		CouponCodeFolderPath:                strings.ToLower(mustGetEnv("COUPON_CODE_FOLDER_PATH")),
 		CouponCodeFilePartialIndexChunkSize: getEnvInt("COUPON_CODE_FILE_PARTIAL_INDEX_CHUNK_SIZE", 100000),
+		CouponCodeFileConcurrentPoolSize:    getEnvInt("COUPON_CODE_FILE_CONCURRENT_POOL_SIZE", 5),
 	}
 }
 

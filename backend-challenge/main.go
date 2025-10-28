@@ -30,7 +30,7 @@ func main() {
 
 	productRepo := repository.GetProductRepository()
 	orderRepo := repository.GetOrderRepository()
-	fileReader, err := reader.GetFileReader("hdd", config.AppConfig.CouponCodeFolderPath, config.AppConfig.CouponCodeFilePartialIndexChunkSize, config.AppConfig.CouponCodeFileConcurrentBatchSize)
+	fileReader, err := reader.GetFileReader("hdd", config.AppConfig.CouponCodeFolderPath, config.AppConfig.CouponCodeFilePartialIndexChunkSize, config.AppConfig.CouponCodeFileConcurrentPoolSize)
 	if err != nil {
 		config.Logger.Error().Err(err).Msg("Failed in creating the File reader.")
 	}

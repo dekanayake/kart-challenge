@@ -62,6 +62,16 @@ func (c *OrderController) CreateOrder(ctx *gin.Context) {
 	orderItems := make([]repository.OrderItem, 0)
 
 	for _, orderItem := range req.Items {
+		product, err := c.ProductRepo.GetProductByID(orderItem.ProductID)
+		if err != nil {
+			config.Logger.Err(err).Str("product id", orderItem.ProductID).Msg("Error occured while retrieving product for id")
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create order"})
+		}
+		if product == nil {
+			config.Logger.Error().Str("product id", orderItem.ProductID).Msg("Product does not exist for the order item")
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "product not found in order item"})
+		}
+
 		orderItems = append(orderItems, repository.OrderItem{
 			ProductId: orderItem.ProductID,
 			Quantity:  orderItem.Quantity,
@@ -91,7 +101,7 @@ func (c *OrderController) CreateOrder(ctx *gin.Context) {
 		})
 		product, err := c.ProductRepo.GetProductByID(item.ProductId)
 		if err != nil {
-			config.Logger.Err(err)
+			config.Logger.Err(err).Str("product id", item.ProductId).Msg("Error occured while retrieving product for id")
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Error creating order"})
 		}
 		productsResponse = append(productsResponse, Product{

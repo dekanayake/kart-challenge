@@ -6,7 +6,7 @@ A high-performance Go-based e-commerce API server with advanced coupon code vali
 
 - **Product Management**: List products with pagination and retrieve individual product details
 - **Order Processing**: Create orders with item validation and coupon code support
-- **Advanced Coupon Validation**: High-performance coupon code validation using optimized HDD file reader
+- ** Coupon Validation**:  coupon code validation using  HDD file reader
 
 ## 📋 API Operations
 

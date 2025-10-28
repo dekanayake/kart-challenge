@@ -6,7 +6,7 @@ A high-performance Go-based e-commerce API server with advanced coupon code vali
 
 - **Product Management**: List products with pagination and retrieve individual product details
 - **Order Processing**: Create orders with item validation and coupon code support
-- ** Coupon Validation**:  coupon code validation using  HDD file reader
+- **Coupon Validation**:  coupon code validation using  HDD file reader
 
 ## 📋 API Operations
 
@@ -66,6 +66,28 @@ The HDD File Reader implements following optimization approach:
 ### Prerequisites
 - Go 1.19 or higher
 - Sorted coupon code files in the specified directory
+
+### Sorting Coupon Files (If Required)
+
+The HDD File Reader requires coupon code files to be sorted in ascending lexicographic order for optimal performance. If your coupon files are not sorted, use the provided sorting utility:
+
+```bash
+# Navigate to utils directory
+cd utils
+
+# Sort a single file
+go run sort_file.go input_file.txt output_file.txt
+
+# Sort with custom chunk size (default: 100MB)
+go run sort_file.go input_file.txt output_file.txt 50000000
+
+# Example: Sort coupon files
+go run sort_file.go ../assets/unsorted/couponbase1 ../assets/sort/couponbase1
+go run sort_file.go ../assets/unsorted/couponbase2 ../assets/sort/couponbase2
+go run sort_file.go ../assets/unsorted/couponbase3 ../assets/sort/couponbase3
+```
+
+
 
 ### Environment Variables
 ```bash

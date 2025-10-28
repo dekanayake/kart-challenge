@@ -1,6 +1,6 @@
 # Backend Challenge - E-Commerce API
 
-A high-performance Go-based e-commerce API server with advanced coupon code validation using optimized file search algorithms.
+A  e-commerce API server with coupon code validation using optimized file search.
 
 ## 🚀 Features
 
